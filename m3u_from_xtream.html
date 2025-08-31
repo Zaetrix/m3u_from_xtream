@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Xtream Playlist & EPG URL Builder + Credential Checker</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+    :root {
+        --bg:#0f141a;
+        --bg-alt:#18222c;
+        --accent:#4da3ff;
+        --accent-hover:#3394ff;
+        --text:#e6eef5;
+        --text-dim:#9db1c3;
+        --danger:#ff4d61;
+        --warning:#ffb347;
+        --ok:#3ddc97;
+        --info:#5bb8ff;
+        --amber:#ffb347;
+        --radius:14px;
+        --focus:0 0 0 3px #4da3ff55;
+        font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin:0;
+        background: radial-gradient(circle at 25% 15%, #1d2b38, #0f141a 70%);
+        color:var(--text);
+        min-height:100dvh;
+        display:flex;
+        flex-direction:column;
+        padding:clamp(1rem,2vw,2.5rem);
+        gap:2rem;
+    }
+    h1 {
+        margin:0;
+        font-size:clamp(1.7rem,2.4vw,2.6rem);
+        letter-spacing:.5px;
+        background:linear-gradient(120deg,#fff,#a8d8ff);
+        -webkit-background-clip:text;
+        color:transparent;
+    }
+    h2 {
+        margin-top:0;
+        font-size:1.05rem;
+        letter-spacing:.5px;
+    }
+    h3 {
+        margin:0;
+        font-size:.85rem;
+        font-weight:600;
+        letter-spacing:.5px;
+        text-transform:uppercase;
+        color:var(--accent);
+    }
+    p.lead { margin:0 0 .75rem; color:var(--text-dim); }
+    .card {
+        background:linear-gradient(145deg,#1a2430,#121a22);
+        border:1px solid #253444;
+        border-radius:var(--radius);
+        padding:1.2rem clamp(1rem,2vw,2rem) 1.6rem;
+        box-shadow:0 8px 24px -12px #000a;
+        backdrop-filter:blur(6px);
+    }
+    form {
+        display:grid;
+        gap:1rem 1.2rem;
+        grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+        align-items:start;
+    }
+    label {
+        display:flex;
+        flex-direction:column;
+        font-size:.8rem;
+        letter-spacing:.5px;
+        text-transform:uppercase;
+        gap:.35rem;
+        color:var(--text-dim);
+    }
+    input[type=text], input[type=password], input[type=url] {
+        background:#0f1820;
+        border:1px solid #2b3c4c;
+        color:var(--text);
+        padding:.75rem .85rem;
+        border-radius:10px;
+        font-size:.95rem;
+        outline:none;
+        transition:.18s border,.18s background;
+    }
+    input:focus {
+        border-color:var(--accent);
+        box-shadow:var(--focus);
+    }
+
+    /* Button row adjustments */
+    .btn-row {
+        grid-column:1 / -1;
+        display:flex;
+        gap:.65rem;
+        align-items:stretch;
+        flex-wrap:nowrap;            /* keep single line */
+        overflow-x:auto;             /* allow horizontal scroll on very small screens */
+        padding-bottom:.25rem;
+        scrollbar-width:thin;
+        -webkit-overflow-scrolling:touch;
+    }
+    .btn-row::-webkit-scrollbar { height:6px; }
+    .btn-row::-webkit-scrollbar-track { background:transparent; }
+    .btn-row::-webkit-scrollbar-thumb { background:#243544; border-radius:4px; }
+
+    button {
+        cursor:pointer;
+        border:none;
+        font-size:.85rem;
+        font-weight:600;
+        letter-spacing:.5px;
+        padding:.85rem 1.05rem;
+        border-radius:12px;
+        display:inline-flex;
+        align-items:center;
+        gap:.55rem;
+        background:linear-gradient(120deg,var(--accent),#2477d4);
+        color:#fff;
+        box-shadow:0 4px 14px -4px #2477d4aa, 0 1px 0 0 #67b8ff inset;
+        transition:.18s transform,.18s box-shadow,.18s background;
+        white-space:nowrap;
+    }
+    button:hover { background:linear-gradient(120deg,var(--accent-hover),#1d6fc9); }
+    button:active { transform:translateY(2px); box-shadow:0 2px 8px -4px #2477d4aa; }
+    button.secondary {
+        background:#253444;
+        box-shadow:none;
+        color:var(--text-dim);
+        font-weight:500;
+    }
+    button.secondary:hover { background:#2e4153; color:var(--text); }
+    button.secondary:active { transform:translateY(2px); }
+    button.warning {
+        background:linear-gradient(120deg,#ffb347,#ff9950);
+        box-shadow:0 4px 14px -4px #ff995066, 0 1px 0 0 #ffd4a1 inset;
+    }
+    button.warning:hover { background:linear-gradient(120deg,#ffbf63,#ff8c38); }
+
+    .grid-two { display:grid; gap:1.25rem; }
+    @media (min-width:960px){ .grid-two { grid-template-columns:2fr 1fr; } }
+
+    .results {
+        display:grid;
+        gap:1.1rem;
+        margin-top:1.25rem;
+    }
+    .url-row {
+        background:#121c25;
+        border:1px solid #243544;
+        border-radius:12px;
+        padding:.9rem .95rem 1rem;
+        display:grid;
+        gap:.6rem;
+        position:relative;
+    }
+    .url-row .top-line {
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        justify-content:space-between;
+        gap:.75rem;
+    }
+    .mono {
+        font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+        font-size:.78rem;
+        line-height:1.35;
+        word-break:break-all;
+        background:#0c141b;
+        padding:.65rem .6rem;
+        border:1px solid #1e2a35;
+        border-radius:8px;
+        position:relative;
+    }
+    .actions {
+        display:flex;
+        gap:.5rem;
+        flex-wrap:wrap;
+        align-items:center;
+    }
+    .copy-btn {
+        background:#1f2d39;
+        color:var(--text-dim);
+        font-size:.65rem;
+        padding:.45rem .65rem;
+        border-radius:7px;
+        border:1px solid #2d3e4e;
+        cursor:pointer;
+        display:inline-flex;
+        align-items:center;
+        gap:.4rem;
+        transition:.15s background,.15s color;
+        white-space:nowrap;
+    }
+    .copy-btn:hover { background:#2b3c4b; color:var(--text); }
+    .desc { font-size:.65rem; color:#6f8699; letter-spacing:.3px; }
+
+    .foot {
+        font-size:.65rem;
+        color:#60798c;
+        text-align:center;
+        margin-top:2rem;
+        opacity:.8;
+    }
+
+    .tag {
+        font-size:.55rem;
+        background:#20313f;
+        padding:.25rem .45rem;
+        border-radius:5px;
+        letter-spacing:.8px;
+        border:1px solid #2b4455;
+        color:#8fbbd9;
+    }
+    .inline-flex { display:inline-flex; gap:.4rem; align-items:center; flex-wrap:wrap; }
+
+    .fade-in { animation:fade .5s ease; }
+    @keyframes fade { from {opacity:0; transform:translateY(4px);} to {opacity:1; transform:translateY(0);} }
+
+    .error { color:var(--danger); font-size:.75rem; margin-top:.25rem; }
+
+    /* Credential status area (now full-width) */
+    .status-bar {
+        display:flex;
+        flex-direction:column;
+        gap:.75rem;
+        background:#141f29;
+        border:1px solid #223546;
+        padding:1rem 1.05rem 1.05rem;
+        border-radius:14px;
+        position:relative;
+        width:100%;
+        grid-column:1 / -1; /* span entire form width */
+    }
+    .status-line {
+        display:flex;
+        flex-wrap:wrap;
+        gap:.6rem;
+        align-items:center;
+    }
+    .status-pill {
+        font-size:.65rem;
+        text-transform:uppercase;
+        letter-spacing:.9px;
+        padding:.45rem .75rem .4rem;
+        border-radius:999px;
+        font-weight:600;
+        background:#253b4a;
+        color:#fff;
+        display:inline-flex;
+        align-items:center;
+        gap:.4rem;
+    }
+    .status-pill.ok { background:var(--ok); color:#053222; }
+    .status-pill.warn { background:var(--warning); color:#402301; }
+    .status-pill.err { background:var(--danger); color:#310006; }
+    .status-pill.info { background:var(--info); color:#021d2d; }
+
+    .meta-grid {
+        display:grid;
+        gap:.55rem .9rem;
+        grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+        font-size:.65rem;
+    }
+    .meta-grid div {
+        background:#0f1820;
+        border:1px solid #1e2c36;
+        padding:.6rem .7rem .65rem;
+        border-radius:10px;
+    }
+    .meta-grid div strong {
+        display:block;
+        font-size:.55rem;
+        color:#7ea7c4;
+        font-weight:600;
+        letter-spacing:.6px;
+        text-transform:uppercase;
+        margin-bottom:.25rem;
+    }
+
+    .note { font-size:.6rem; color:#7b92a5; line-height:1.35; }
+
+    /* Support badge (allowed_output_formats) */
+    .support-badge {
+        font-size:.55rem;
+        letter-spacing:.7px;
+        padding:.3rem .55rem .25rem;
+        border-radius:999px;
+        font-weight:600;
+        text-transform:uppercase;
+        display:inline-flex;
+        align-items:center;
+        gap:.3rem;
+        border:1px solid transparent;
+        background:#253b4a;
+        color:#aac2d4;
+        white-space:nowrap;
+    }
+    .support-supported { background:#133322; border-color:#1f5f3f; color:#7ff2c2; }
+    .support-not { background:#36141c; border-color:#70313f; color:#ff828f; }
+    .support-unknown { background:#1f2730; border-color:#2d3a46; color:#93a5b3; }
+    .support-implicit { background:#493217; border-color:#8e642c; color:#ffcd89; }
+
+    .legend { font-size:.6rem; display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.75rem; }
+    .legend-item { display:flex; align-items:center; gap:.3rem; background:#152029; border:1px solid #23323e; padding:.25rem .5rem; border-radius:8px; }
+    .legend-item span { font-weight:600; letter-spacing:.5px; }
+
+    .advanced-toggle { margin-top:.6rem; }
+    .divider {
+        height:1px;
+        margin:1.3rem 0 1rem;
+        background:linear-gradient(90deg,#1f2b36,#2a3a47 40%,#1f2b36);
+        border:none;
+    }
+
+    /* Make header card layout breathe on large screens */
+    @media (min-width:1100px){
+        header.card { padding-top:1.6rem; }
+    }
+</style>
+</head>
+<body>
+    <header class="card">
+        <h1>Xtream Playlist & EPG URL Builder</h1>
+        <p class="lead">Generate M3U / M3U Plus & EPG URLs, validate credentials, view account metadata, and see which playlist output formats your account supports.</p>
+        <form id="builderForm" autocomplete="off">
+            <label>
+                Portal URL
+                <input id="portal" type="text" placeholder="example.com:8080" required />
+            </label>
+            <label>
+                Username
+                <input id="user" type="text" placeholder="user123" required />
+            </label>
+            <label>
+                Password
+                <div style="position:relative; display:flex; align-items:center;">
+                    <input id="pass" type="password" placeholder="••••••" required style="flex:1; padding-right:4.2rem;" />
+                    <button type="button" id="togglePass" class="copy-btn" style="position:absolute; right:.35rem; top:50%; transform:translateY(-50%);">Show</button>
+                </div>
+            </label>
+
+            <!-- Buttons: single horizontal line -->
+            <div class="btn-row">
+                <button type="submit" id="generateBtn">Generate & Validate</button>
+                <button class="secondary" type="button" id="validateBtn" disabled>Re-Validate</button>
+                <button class="secondary" type="button" id="resetBtn">Reset</button>
+                <button class="warning" type="button" id="toggleAdvancedBtn">Toggle Advanced API</button>
+            </div>
+
+            <div id="errors" style="grid-column:1 / -1;"></div>
+
+            <!-- Credential status now spans full width of form -->
+            <div id="credStatus" class="status-bar" style="display:none;">
+                <div class="status-line">
+                    <div id="statusPill" class="status-pill info"><span id="statusText">Waiting</span></div>
+                    <div id="statusMessage" class="small"></div>
+                    <button id="rawToggle" type="button" class="copy-btn" style="display:none;">Show Raw</button>
+                </div>
+                <div id="meta" class="meta-grid"></div>
+                <pre id="rawData" style="display:none; margin:0; background:#0c141b; border:1px solid #1c2831; padding:.6rem .75rem; font-size:.6rem; border-radius:8px; max-height:260px; overflow:auto;"></pre>
+                <div class="note">
+                    If you see a CORS/network error, the server blocks browser-origin requests. Use a tiny proxy if you must validate.
+                </div>
+            </div>
+        </form>
+    </header>
+
+    <main class="grid-two">
+        <div class="card" style="display:flex; flex-direction:column; gap:1.6rem;">
+            <section>
+                <h2>Playlist URLs</h2>
+                <div class="legend">
+                    <div class="legend-item"><span class="support-badge support-supported" style="padding:.15rem .4rem; font-size:.5rem;">Supported</span><span>Format present.</span></div>
+                    <div class="legend-item"><span class="support-badge support-not" style="padding:.15rem .4rem; font-size:.5rem;">Not</span><span>Explicit format absent.</span></div>
+                    <div class="legend-item"><span class="support-badge support-implicit" style="padding:.15rem .4rem; font-size:.5rem;">Implicit</span><span>Server default.</span></div>
+                    <div class="legend-item"><span class="support-badge support-unknown" style="padding:.15rem .4rem; font-size:.5rem;">Unknown</span><span>No validation yet.</span></div>
+                </div>
+                <div id="playlistResults" class="results"></div>
+            </section>
+            <hr class="divider" />
+            <section>
+                <h2>EPG & Base API</h2>
+                <div id="epgResults" class="results"></div>
+            </section>
+            <div id="advancedSection" style="display:none;">
+                <hr class="divider" />
+                <section>
+                    <h2>Advanced API Endpoints</h2>
+                    <div id="advancedResults" class="results"></div>
+                </section>
+            </div>
+        </div>
+
+        <aside class="card" style="display:flex; flex-direction:column; gap:1.1rem;">
+            <h2 style="margin-bottom:.25rem;">About & Tips</h2>
+            <p style="font-size:.7rem; line-height:1.4; color:#93a9bc;">
+                After validation, playlist variants are annotated using your account's <code style="background:#182630; padding:.15rem .4rem; border-radius:5px; border:1px solid #253847;">allowed_output_formats</code>.
+                Copy any URL instantly. Toggle advanced endpoints as needed.
+            </p>
+            <ul style="font-size:.65rem; margin:0 0 0 1.05rem; padding:0; color:#6f8699; list-style:disc; display:grid; gap:.4rem;">
+                <li>Credentials only sent directly to your portal.</li>
+                <li>M3U Plus includes extended tvg / group metadata.</li>
+                <li>Implicit variants rely on server default (often TS).</li>
+                <li>Gzip EPG reduces bandwidth (if supported).</li>
+                <li>Unknown badge means no format data yet.</li>
+            </ul>
+            <div style="margin-top:.75rem;">
+                <h3 style="color:#8fbde2; text-transform:none; font-size:.75rem;">Security Note</h3>
+                <p style="font-size:.6rem; line-height:1.35; color:#829caf;">
+                    Avoid sharing this page with credentials filled. Clear data (Reset) after use.
+                </p>
+            </div>
+        </aside>
+    </main>
+
+    <div class="foot">
+        Built locally. Formats & availability depend on provider configuration.
+    </div>
+
+<script>
+(function(){
+    const portalEl = document.getElementById('portal');
+    const userEl = document.getElementById('user');
+    const passEl = document.getElementById('pass');
+    const togglePassBtn = document.getElementById('togglePass');
+
+    const form = document.getElementById('builderForm');
+    const playlistContainer = document.getElementById('playlistResults');
+    const epgContainer = document.getElementById('epgResults');
+    const advancedContainer = document.getElementById('advancedResults');
+    const advancedSection = document.getElementById('advancedSection');
+
+    const generateBtn = document.getElementById('generateBtn');
+    const validateBtn = document.getElementById('validateBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const toggleAdvancedBtn = document.getElementById('toggleAdvancedBtn');
+
+    const errorBox = document.getElementById('errors');
+
+    const credStatus = document.getElementById('credStatus');
+    const statusPill = document.getElementById('statusPill');
+    const statusText = document.getElementById('statusText');
+    const statusMessage = document.getElementById('statusMessage');
+    const rawToggle = document.getElementById('rawToggle');
+    const rawData = document.getElementById('rawData');
+    const meta = document.getElementById('meta');
+
+    let lastAllowedOutputs = null; // null = unknown yet
+    let advancedVisible = false;
+    let aborter = null;
+
+    function normalizePortal(raw){
+        if(!raw) return "";
+        let url = raw.trim();
+        if(!/^https?:\/\//i.test(url)){
+            url = "http://" + url;
+        }
+        try {
+            const u = new URL(url);
+            return u.origin.replace(/\/+$/,'');
+        } catch(e){
+            return "";
+        }
+    }
+
+    function qp(user,pass,extra=""){
+        return `username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}${extra}`;
+    }
+
+    function playlistVariants(base,user,pass){
+        return [
+            {
+                id:"classic-implicit",
+                label:"Classic M3U (Implicit)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u")}`,
+                requiresOutput:null,
+                implicit:true,
+                desc:"Basic playlist (server default output format)."
+            },
+            {
+                id:"classic-ts",
+                label:"Classic M3U (TS Explicit)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u&output=ts")}`,
+                requiresOutput:"ts",
+                desc:"Classic list forcing transport stream."
+            },
+            {
+                id:"classic-m3u8",
+                label:"Classic M3U (HLS/M3U8)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u&output=m3u8")}`,
+                requiresOutput:"m3u8",
+                desc:"Classic list forcing HLS segments."
+            },
+            {
+                id:"plus-ts",
+                label:"Extended M3U Plus (TS)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u_plus&output=ts")}`,
+                requiresOutput:"ts",
+                desc:"Extended metadata playlist (TS)."
+            },
+            {
+                id:"plus-m3u8",
+                label:"Extended M3U Plus (HLS)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u_plus&output=m3u8")}`,
+                requiresOutput:"m3u8",
+                desc:"Extended metadata playlist (HLS)."
+            },
+            {
+                id:"plus-implicit",
+                label:"M3U Plus (Implicit Output)",
+                url:`${base}/get.php?${qp(user,pass,"&type=m3u_plus")}`,
+                requiresOutput:null,
+                implicit:true,
+                desc:"Extended metadata; server decides stream format."
+            }
+        ];
+    }
+
+    function epgAndApis(base,user,pass){
+        return [
+            {
+                id:"epg-xml",
+                label:"EPG (XMLTV)",
+                url:`${base}/xmltv.php?${qp(user,pass)}`,
+                desc:"Standard XMLTV EPG feed."
+            },
+            {
+                id:"epg-gzip",
+                label:"EPG (XMLTV Gzip)",
+                url:`${base}/xmltv.php?${qp(user,pass,"&compression=gzip")}`,
+                desc:"Compressed EPG (if server supports)."
+            },
+            {
+                id:"player-api",
+                label:"Player API (Base)",
+                url:`${base}/player_api.php?${qp(user,pass)}`,
+                desc:"Root JSON (user_info, categories, status)."
+            }
+        ];
+    }
+
+    function advancedApis(base,user,pass){
+        return [
+            {
+                id:"live-cats",
+                label:"Player API: Live Categories",
+                url:`${base}/player_api.php?${qp(user,pass,"&action=get_live_categories")}`,
+                desc:"List live stream categories."
+            },
+            {
+                id:"vod-cats",
+                label:"Player API: VOD Categories",
+                url:`${base}/player_api.php?${qp(user,pass,"&action=get_vod_categories")}`,
+                desc:"List video-on-demand categories."
+            },
+            {
+                id:"series-cats",
+                label:"Player API: Series Categories",
+                url:`${base}/player_api.php?${qp(user,pass,"&action=get_series_categories")}`,
+                desc:"List series categories."
+            }
+        ];
+    }
+
+    function supportBadge(variant){
+        if(lastAllowedOutputs === null){
+            return {cls:"support-badge support-unknown", text:"Unknown"};
+        }
+        if(variant.requiresOutput === null){
+            return {cls: variant.implicit ? "support-badge support-implicit" : "support-badge support-supported", text: variant.implicit ? "Implicit" : "Supported"};
+        }
+        if(!Array.isArray(lastAllowedOutputs)){
+            return {cls:"support-badge support-unknown", text:"Unknown"};
+        }
+        const needle = variant.requiresOutput.toLowerCase();
+        const supported = lastAllowedOutputs.map(o=>String(o).toLowerCase()).includes(needle);
+        return supported ?
+            {cls:"support-badge support-supported", text:"Supported"} :
+            {cls:"support-badge support-not", text:"Not Supported"};
+    }
+
+    function createRow(item, isPlaylistVariant=false){
+        const row = document.createElement('div');
+        row.className = 'url-row fade-in';
+        const badge = isPlaylistVariant ? supportBadge(item) : null;
+        row.dataset.id = item.id;
+        row.dataset.url = item.url;
+        row.innerHTML = `
+            <div class="top-line">
+                <h3>${item.label}</h3>
+                ${isPlaylistVariant ? `<span class="${badge.cls}" data-support-badge>${badge.text}</span>` : ''}
+            </div>
+            <div class="mono selectable" data-url-text>${item.url}</div>
+            <div class="actions">
+                <button class="copy-btn" data-copy="${item.url}" aria-label="Copy URL">Copy</button>
+                <span class="desc">${item.desc || ""}</span>
+            </div>
+        `;
+        return row;
+    }
+
+    function renderRows(container, items, playlistVariant=false){
+        const frag = document.createDocumentFragment();
+        items.forEach(it=>frag.appendChild(createRow(it, playlistVariant)));
+        container.appendChild(frag);
+    }
+
+    function updatePlaylistBadges(){
+        playlistContainer.querySelectorAll('.url-row[data-id]').forEach(row=>{
+            const id = row.dataset.id;
+            const url = row.dataset.url || '';
+            const implicit = !/output=/.test(url);
+            let requiresOutput = null;
+            if(/output=ts/i.test(url)) requiresOutput = 'ts';
+            if(/output=m3u8/i.test(url)) requiresOutput = 'm3u8';
+            const variant = { id, url, requiresOutput, implicit };
+            const {cls,text} = supportBadge(variant);
+            const badgeEl = row.querySelector('[data-support-badge]');
+            if(badgeEl){
+                badgeEl.className = cls;
+                badgeEl.textContent = text;
+            }
+        });
+    }
+
+    function copyToClipboard(text, btn){
+        navigator.clipboard.writeText(text).then(()=>{
+            const original = btn.textContent;
+            btn.textContent = "Copied!";
+            btn.style.background = "#2d6fad";
+            btn.style.color = "#fff";
+            setTimeout(()=>{
+                btn.textContent = original;
+                btn.style.background = "";
+                btn.style.color = "";
+            },1200);
+        }).catch(()=>{
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand('copy'); } catch(_){}
+            document.body.removeChild(ta);
+            alert("Copied (fallback).");
+        });
+    }
+
+    function showStatusBox(show=true){
+        credStatus.style.display = show ? "" : "none";
+    }
+
+    function setStatus(state, msg){
+        const map = {
+            loading:{cls:'status-pill info', text:'Checking'},
+            active:{cls:'status-pill ok', text:'Active'},
+            expired:{cls:'status-pill warn', text:'Expired'},
+            disabled:{cls:'status-pill err', text:'Disabled'},
+            banned:{cls:'status-pill err', text:'Banned'},
+            invalid:{cls:'status-pill err', text:'Invalid'},
+            error:{cls:'status-pill err', text:'Error'},
+            unknown:{cls:'status-pill warn', text:'Unknown'}
+        };
+        const info = map[state] || map.unknown;
+        statusPill.className = info.cls;
+        statusText.textContent = info.text;
+        statusMessage.textContent = msg || '';
+    }
+
+    function unixToLocal(ts){
+        if(!ts || isNaN(ts)) return '—';
+        const d = new Date(Number(ts)*1000);
+        return isNaN(d.getTime()) ? '—' : d.toLocaleString();
+    }
+
+    function daysRemaining(ts){
+        if(!ts || isNaN(ts)) return '—';
+        const diff = Number(ts) - (Date.now()/1000);
+        if(diff <= 0) return '0';
+        return Math.floor(diff/86400);
+    }
+
+    function renderMeta(info){
+        if(!info){
+            meta.innerHTML = "";
+            return;
+        }
+        const fields = [
+            {k:'Username', v:info.username},
+            {k:'Status', v:info.status},
+            {k:'Exp Date', v:unixToLocal(info.exp_date)},
+            {k:'Days Left', v:daysRemaining(info.exp_date)},
+            {k:'Max Conn', v:info.max_connections},
+            {k:'Active Conn', v:info.active_cons},
+            {k:'Trial', v:String(info.is_trial)==='1'?'Yes':'No'},
+            {k:'Created', v:unixToLocal(info.created_at)}
+        ];
+        meta.innerHTML = fields.map(f=>`<div><strong>${f.k}</strong><span>${f.v ?? '—'}</span></div>`).join("");
+    }
+
+    function clearOutputs(){
+        playlistContainer.innerHTML = "";
+        epgContainer.innerHTML = "";
+        advancedContainer.innerHTML = "";
+        errorBox.innerHTML = "";
+        rawData.textContent = "";
+        rawData.style.display = "none";
+        rawToggle.style.display = "none";
+        lastAllowedOutputs = null;
+    }
+
+    async function validate(portal, user, pass){
+        showStatusBox(true);
+        setStatus('loading', 'Contacting server...');
+        renderMeta(null);
+        rawData.style.display = 'none';
+        rawToggle.style.display = 'none';
+        rawData.textContent = '';
+        validateBtn.disabled = true;
+
+        if(aborter){
+            try { aborter.abort(); } catch(_){}
+        }
+        aborter = new AbortController();
+        const url = `${portal}/player_api.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`;
+
+        let json;
+        try {
+            const resp = await fetch(url, { signal: aborter.signal });
+            if(!resp.ok){
+                setStatus('error', `HTTP ${resp.status}`);
+                validateBtn.disabled = false;
+                updatePlaylistBadges();
+                return;
+            }
+            json = await resp.json();
+        } catch(err){
+            if(err.name === 'AbortError') return;
+            setStatus('error', 'Fetch failed (Possible CORS or network issue).');
+            statusMessage.insertAdjacentHTML('beforeend',' Consider a small proxy for validation.');
+            validateBtn.disabled = false;
+            updatePlaylistBadges();
+            return;
+        }
+
+        rawToggle.style.display = 'inline-flex';
+        rawData.textContent = JSON.stringify(json, null, 2);
+
+        const info = json.user_info || json.userInfo || null;
+        if(!info){
+            setStatus('invalid','No user_info object in response.');
+            validateBtn.disabled=false;
+            updatePlaylistBadges();
+            return;
+        }
+
+        if(Array.isArray(info.allowed_output_formats)){
+            lastAllowedOutputs = info.allowed_output_formats.slice();
+        } else {
+            lastAllowedOutputs = [];
+        }
+
+        let st = (info.status || '').toLowerCase();
+        if(info.auth === 0 && !st) st = 'invalid';
+        if(st === 'active') setStatus('active','Credentials valid.');
+        else if(st === 'expired') setStatus('expired','Account expired.');
+        else if(st === 'disabled') setStatus('disabled','Account disabled.');
+        else if(st === 'banned') setStatus('banned','Account banned.');
+        else if(info.auth === 0) setStatus('invalid', info.message || 'Auth=0');
+        else if(info.message && /expired/i.test(info.message)) setStatus('expired', info.message);
+        else setStatus('unknown', info.message || 'Unrecognized status.');
+
+        renderMeta(info);
+        updatePlaylistBadges();
+        validateBtn.disabled = false;
+    }
+
+    form.addEventListener('submit', e=>{
+        e.preventDefault();
+        clearOutputs();
+
+        const portal = normalizePortal(portalEl.value);
+        const user = userEl.value.trim();
+        const pass = passEl.value;
+
+        const errors = [];
+        if(!portal) errors.push("Portal URL is invalid.");
+        if(!user) errors.push("Username is required.");
+        if(!pass) errors.push("Password is required.");
+
+        if(errors.length){
+            errorBox.innerHTML = errors.map(m=>`<div class="error">${m}</div>`).join("");
+            showStatusBox(false);
+            return;
+        }
+
+        const playlist = playlistVariants(portal,user,pass);
+        const epg = epgAndApis(portal,user,pass);
+        renderRows(playlistContainer, playlist, true);
+        renderRows(epgContainer, epg, false);
+
+        if(advancedVisible){
+            const adv = advancedApis(portal,user,pass);
+            renderRows(advancedContainer, adv, false);
+        }
+
+        validateBtn.disabled = false;
+        validate(portal, user, pass);
+    });
+
+    validateBtn.addEventListener('click', ()=>{
+        const portal = normalizePortal(portalEl.value);
+        const user = userEl.value.trim();
+        const pass = passEl.value;
+        if(!portal || !user || !pass){
+            errorBox.innerHTML = `<div class="error">Fill portal, username and password first.</div>`;
+            return;
+        }
+        validate(portal, user, pass);
+    });
+
+    document.body.addEventListener('click', e=>{
+        const copyBtn = e.target.closest('[data-copy]');
+        if(copyBtn){
+            copyToClipboard(copyBtn.getAttribute('data-copy'), copyBtn);
+        }
+    });
+
+    rawToggle.addEventListener('click', ()=>{
+        const showing = rawData.style.display !== 'none';
+        rawData.style.display = showing ? 'none' : 'block';
+        rawToggle.textContent = showing ? 'Show Raw' : 'Hide Raw';
+    });
+
+    toggleAdvancedBtn.addEventListener('click', ()=>{
+        advancedVisible = !advancedVisible;
+        advancedSection.style.display = advancedVisible ? '' : 'none';
+        const portal = normalizePortal(portalEl.value);
+        const user = userEl.value.trim();
+        const pass = passEl.value;
+        if(playlistContainer.children.length && portal && user && pass){
+            playlistContainer.innerHTML = '';
+            epgContainer.innerHTML = '';
+            advancedContainer.innerHTML = '';
+            const playlist = playlistVariants(portal,user,pass);
+            const epg = epgAndApis(portal,user,pass);
+            renderRows(playlistContainer, playlist, true);
+            renderRows(epgContainer, epg, false);
+            if(advancedVisible){
+                const adv = advancedApis(portal,user,pass);
+                renderRows(advancedContainer, adv, false);
+            }
+            updatePlaylistBadges();
+        }
+    });
+
+    resetBtn.addEventListener('click', ()=>{
+        if(aborter) { try { aborter.abort(); } catch(_){ } }
+        form.reset();
+        clearOutputs();
+        showStatusBox(false);
+        validateBtn.disabled = true;
+    });
+
+    togglePassBtn.addEventListener('click', ()=>{
+        if(passEl.type === 'password'){
+            passEl.type = 'text';
+            togglePassBtn.textContent = 'Hide';
+        } else {
+            passEl.type = 'password';
+            togglePassBtn.textContent = 'Show';
+        }
+    });
+})();
+</script>
+</body>
+</html>
